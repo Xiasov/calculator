@@ -1,0 +1,498 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Калькулятор</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one centered column, a display panel over a 4x5 key grid, a short history list below. */
+  :root {
+    --bg: #e6e9ec;
+    --panel: #f4f6f7;
+    --line: #d3d8dd;
+    --fg: #171b1f;
+    --muted: #5d6872;
+    --key: #ffffff;
+    --key-hover: #eef1f3;
+    --fn: #dde2e7;
+    --fn-hover: #d1d7dd;
+    --op: #cfe5de;
+    --op-hover: #bfdcd2;
+    --op-fg: #14574a;
+    --accent: #1d6b5a;
+    --accent-hover: #185a4b;
+    --accent-fg: #ffffff;
+    --error: #b3261e;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101315;
+      --panel: #191d20;
+      --line: #2a3035;
+      --fg: #eef1f3;
+      --muted: #94a0a9;
+      --key: #262b30;
+      --key-hover: #2e343a;
+      --fn: #323941;
+      --fn-hover: #3b434b;
+      --op: #1f3a34;
+      --op-hover: #274a42;
+      --op-fg: #8fd6c3;
+      --accent: #52b89f;
+      --accent-hover: #67c6ae;
+      --accent-fg: #0a1c17;
+      --error: #f2a29b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101315;
+    --panel: #191d20;
+    --line: #2a3035;
+    --fg: #eef1f3;
+    --muted: #94a0a9;
+    --key: #262b30;
+    --key-hover: #2e343a;
+    --fn: #323941;
+    --fn-hover: #3b434b;
+    --op: #1f3a34;
+    --op-hover: #274a42;
+    --op-fg: #8fd6c3;
+    --accent: #52b89f;
+    --accent-hover: #67c6ae;
+    --accent-fg: #0a1c17;
+    --error: #f2a29b;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    padding-block: 20px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .wrap { max-width: 380px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  .calc {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .screen {
+    min-height: 112px;
+    padding: 8px 6px 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+  }
+  .expr {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    color: var(--muted);
+    min-height: 1.4em;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .result {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: var(--result-size, 2.8rem);
+    line-height: 1.1;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .result.is-error { color: var(--error); font-family: var(--font-sans); font-size: 1.5rem; font-weight: 500; letter-spacing: 0; }
+
+  .keys { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .keys button {
+    height: clamp(56px, 10.5vh, 68px);
+    border: 0;
+    border-radius: 14px;
+    font-family: var(--font-sans);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--fg);
+    background: var(--key);
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: background-color 0.12s, transform 0.08s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .keys button:hover { background: var(--key-hover); }
+  .keys button:active { transform: scale(0.96); }
+  .keys button.fn { background: var(--fn); font-size: 1.2rem; }
+  .keys button.fn:hover { background: var(--fn-hover); }
+  .keys button.op { background: var(--op); color: var(--op-fg); font-size: 1.7rem; }
+  .keys button.op:hover { background: var(--op-hover); }
+  .keys button.eq { background: var(--accent); color: var(--accent-fg); font-size: 1.7rem; }
+  .keys button.eq:hover { background: var(--accent-hover); }
+  button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .history { display: flex; flex-direction: column; gap: 6px; }
+  .history[hidden] { display: none; }
+  .history-head { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+  .history-head h2 {
+    margin: 0; font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  }
+  .link-btn {
+    background: none; border: 0; padding: 4px 6px; border-radius: 6px;
+    color: var(--muted); font: inherit; font-size: 0.85rem; cursor: pointer;
+  }
+  .link-btn:hover { color: var(--fg); }
+  .history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .history li button {
+    width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; cursor: pointer; color: var(--fg);
+    font-family: var(--font-mono); font-size: 0.95rem; font-variant-numeric: tabular-nums;
+  }
+  .history li button:hover { background: var(--key-hover); }
+  .history .h-expr { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history .h-res { font-weight: 500; white-space: nowrap; }
+
+  .hint { text-align: center; color: var(--muted); font-size: 0.8rem; margin: 0; }
+  @media (hover: none) { .hint { display: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .keys button { transition: none; }
+    .keys button:active { transform: none; }
+  }
+</style>
+
+<main class="wrap">
+  <h1 class="sr-only">Калькулятор</h1>
+
+  <section class="calc" aria-label="Калькулятор">
+    <div class="screen" aria-live="polite">
+      <div class="expr" id="expr"></div>
+      <div class="result" id="result">0</div>
+    </div>
+
+    <div class="keys" id="keys">
+      <button class="fn" data-k="AC" aria-label="Очистить всё">AC</button>
+      <button class="fn" data-k="BS" aria-label="Стереть последний символ">⌫</button>
+      <button class="fn" data-k="%" aria-label="Процент">%</button>
+      <button class="op" data-k="÷" aria-label="Разделить">÷</button>
+
+      <button data-k="7">7</button>
+      <button data-k="8">8</button>
+      <button data-k="9">9</button>
+      <button class="op" data-k="×" aria-label="Умножить">×</button>
+
+      <button data-k="4">4</button>
+      <button data-k="5">5</button>
+      <button data-k="6">6</button>
+      <button class="op" data-k="−" aria-label="Вычесть">−</button>
+
+      <button data-k="1">1</button>
+      <button data-k="2">2</button>
+      <button data-k="3">3</button>
+      <button class="op" data-k="+" aria-label="Сложить">+</button>
+
+      <button class="fn" data-k="SIGN" aria-label="Сменить знак">±</button>
+      <button data-k="0">0</button>
+      <button data-k="." aria-label="Запятая">,</button>
+      <button class="eq" data-k="=" aria-label="Равно">=</button>
+    </div>
+  </section>
+
+  <section class="history" id="history" hidden aria-label="История вычислений">
+    <div class="history-head">
+      <h2>История</h2>
+      <button class="link-btn" id="clearHistory" type="button">Очистить</button>
+    </div>
+    <ul id="historyList"></ul>
+  </section>
+
+  <p class="hint">Работает и с клавиатуры: цифры, + − * /, Enter, Backspace, Esc</p>
+</main>
+
+<script>
+/*CALC-START*/
+const OPS = "+−×÷";
+const NUM = "(\\d+\\.?\\d*|\\.\\d+)";
+
+function evaluate(s) {
+  const t = s.match(/\d+\.?\d*|\.\d+|[+−×÷()%]/g) || [];
+  let i = 0;
+  const peek = () => t[i];
+  const next = () => t[i++];
+
+  function pExpr() {
+    let l = pTerm();
+    while (peek() === "+" || peek() === "−") {
+      const op = next();
+      const r = pTerm();
+      // "50 + 10%" means 50 + 10% of 50
+      const rv = r.pct ? l.v * r.v : r.v;
+      l = { v: op === "+" ? l.v + rv : l.v - rv, pct: false };
+    }
+    return l;
+  }
+  function pTerm() {
+    let l = pUnary();
+    while (peek() === "×" || peek() === "÷") {
+      const op = next();
+      const r = pUnary();
+      l = { v: op === "×" ? l.v * r.v : l.v / r.v, pct: false };
+    }
+    return l;
+  }
+  function pUnary() {
+    if (peek() === "−") { next(); const r = pUnary(); return { v: -r.v, pct: r.pct }; }
+    if (peek() === "+") { next(); return pUnary(); }
+    return pPost();
+  }
+  function pPost() {
+    let v = pPrim();
+    let pct = false;
+    while (peek() === "%") { next(); v = v / 100; pct = true; }
+    return { v, pct };
+  }
+  function pPrim() {
+    const tok = next();
+    if (tok === "(") {
+      const r = pExpr();
+      if (next() !== ")") throw new Error("paren");
+      return r.v;
+    }
+    const n = parseFloat(tok);
+    if (tok === undefined || Number.isNaN(n)) throw new Error("syntax");
+    return n;
+  }
+
+  const r = pExpr();
+  if (i !== t.length) throw new Error("syntax");
+  return r.v;
+}
+
+function tryEval(s) {
+  const stripped = s.replace(/[+−×÷]+$/, "");
+  if (!stripped || stripped === "−") return null;
+  try { return evaluate(stripped); } catch (e) { return null; }
+}
+
+function round12(v) { return Number(v.toPrecision(12)); }
+
+function fmt(v) {
+  return round12(v).toLocaleString("ru-RU", { maximumFractionDigits: 12 });
+}
+
+function raw(v) {
+  let s = String(round12(v));
+  if (s.includes("e")) return null;
+  return s.startsWith("-") ? "−" + s.slice(1) : s;
+}
+
+function fmtTyping(e) {
+  if (e === "") return "0";
+  const m = e.match(/^(−?)(\d*)(\.(\d*))?$/);
+  if (!m) return e.replace(/\./g, ",");
+  const int = m[2] === "" ? "" : m[2].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return m[1] + (int || (m[3] ? "0" : "")) + (m[3] ? "," + m[4] : "");
+}
+
+function fmtExpr(e) {
+  return e.replace(/\./g, ",").replace(/([\d%)])([+−×÷])/g, "$1 $2 ");
+}
+
+function hasOperator(e) {
+  return /[+×÷%()]/.test(e) || /.−/.test(e);
+}
+/*CALC-END*/
+
+let expr = "";
+let lastExpr = "";
+let err = "";
+let done = false;
+let history = [];
+
+const elExpr = document.getElementById("expr");
+const elResult = document.getElementById("result");
+const elHistory = document.getElementById("history");
+const elList = document.getElementById("historyList");
+
+function lastChar() { return expr.slice(-1); }
+function lastNumber() { return expr.match(new RegExp(NUM + "$")); }
+
+function press(k) {
+  if (err) { err = ""; expr = ""; done = false; }
+
+  if (/^\d$/.test(k)) {
+    if (done) { expr = ""; done = false; }
+    if (lastChar() === ")" || lastChar() === "%") return;
+    const m = lastNumber();
+    if (m && m[0] === "0") expr = expr.slice(0, -1) + k;
+    else expr += k;
+    return;
+  }
+
+  if (k === ".") {
+    if (done) { expr = ""; done = false; }
+    if (lastChar() === ")" || lastChar() === "%") return;
+    const m = lastNumber();
+    if (m && m[0].includes(".")) return;
+    expr += m ? "." : "0.";
+    return;
+  }
+
+  if (OPS.includes(k)) {
+    done = false;
+    if (expr === "") { if (k === "−") expr = "−"; return; }
+    if (expr === "−") return;
+    if (OPS.includes(lastChar())) expr = expr.slice(0, -1) + k;
+    else expr += k;
+    return;
+  }
+
+  if (k === "%") {
+    done = false;
+    if (/[\d%)]$/.test(expr)) expr += "%";
+    return;
+  }
+
+  if (k === "SIGN") {
+    done = false;
+    let m = expr.match(new RegExp("\\(−" + NUM + "\\)$"));
+    if (m) { expr = expr.slice(0, m.index) + m[1]; return; }
+    m = lastNumber();
+    if (m) {
+      const before = expr.slice(0, m.index);
+      if (before === "") expr = "−" + m[0];
+      else if (before === "−") expr = m[0];
+      else expr = before + "(−" + m[0] + ")";
+    }
+    return;
+  }
+
+  if (k === "BS") {
+    done = false;
+    const g = expr.match(new RegExp("\\(−" + NUM + "\\)$"));
+    expr = g ? expr.slice(0, g.index) : expr.slice(0, -1);
+    return;
+  }
+
+  if (k === "AC") { expr = ""; lastExpr = ""; done = false; return; }
+
+  if (k === "=") {
+    if (done || !hasOperator(expr)) return;
+    const v = tryEval(expr);
+    if (v === null) return;
+    if (!Number.isFinite(v)) { err = "Деление на ноль"; return; }
+    const r = raw(v);
+    if (r === null) { err = "Число вне диапазона"; return; }
+    history.unshift({ e: fmtExpr(expr), r: fmt(v), raw: r });
+    history = history.slice(0, 6);
+    lastExpr = fmtExpr(expr);
+    expr = r;
+    done = true;
+  }
+}
+
+function render() {
+  if (err) {
+    elExpr.textContent = "";
+    elResult.textContent = err;
+    elResult.className = "result is-error";
+    elResult.style.removeProperty("--result-size");
+  } else {
+    let big;
+    let small = "";
+    if (done) {
+      big = fmt(tryEval(expr));
+      small = lastExpr + " =";
+    } else if (hasOperator(expr)) {
+      const v = tryEval(expr);
+      big = v !== null && Number.isFinite(v) ? fmt(v) : "0";
+      small = fmtExpr(expr);
+    } else {
+      big = fmtTyping(expr);
+    }
+    elExpr.textContent = small;
+    elResult.textContent = big;
+    elResult.className = "result";
+    const n = big.length;
+    elResult.style.setProperty("--result-size", n > 16 ? "1.6rem" : n > 12 ? "2rem" : n > 9 ? "2.4rem" : "2.8rem");
+    elExpr.scrollLeft = elExpr.scrollWidth;
+  }
+
+  elHistory.hidden = history.length === 0;
+  elList.textContent = "";
+  history.forEach((h, idx) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.h = String(idx);
+    const a = document.createElement("span");
+    a.className = "h-expr";
+    a.textContent = h.e;
+    const r = document.createElement("span");
+    r.className = "h-res";
+    r.textContent = "= " + h.r;
+    b.append(a, r);
+    li.append(b);
+    elList.append(li);
+  });
+}
+
+document.getElementById("keys").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-k]");
+  if (!b) return;
+  press(b.dataset.k);
+  render();
+});
+
+elList.addEventListener("click", (ev) => {
+  const b = ev.target.closest("button[data-h]");
+  if (!b) return;
+  const h = history[Number(b.dataset.h)];
+  if (!h) return;
+  expr = h.raw;
+  lastExpr = h.e;
+  err = "";
+  done = true;
+  render();
+});
+
+document.getElementById("clearHistory").addEventListener("click", () => {
+  history = [];
+  render();
+});
+
+const KEYMAP = { ",": ".", "-": "−", "*": "×", x: "×", X: "×", "/": "÷", Enter: "=", Backspace: "BS", Escape: "AC", Delete: "AC" };
+document.addEventListener("keydown", (ev) => {
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  let k = ev.key;
+  if (Object.prototype.hasOwnProperty.call(KEYMAP, k)) k = KEYMAP[k];
+  if (/^\d$/.test(k) || k === "." || OPS.includes(k) || k === "%" || k === "=" || k === "BS" || k === "AC") {
+    ev.preventDefault();
+    press(k);
+    render();
+  }
+});
+
+render();
+</script>
+
+</body></html>
